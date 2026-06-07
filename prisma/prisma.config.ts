@@ -4,18 +4,16 @@ import { Pool } from "pg"
 import * as dotenv from "dotenv"
 import * as path from "path"
 
-// Load .env.local explicitly since Prisma CLI doesn't load it automatically
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") })
 dotenv.config({ path: path.resolve(process.cwd(), ".env") })
 
 const DATABASE_URL = process.env.DATABASE_URL!
 
 if (!DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set in .env.local or .env")
+  throw new Error("DATABASE_URL is not set")
 }
 
 export default defineConfig({
-  earlyAccess: true,
   schema: "prisma/schema.prisma",
   datasource: {
     url: DATABASE_URL,
