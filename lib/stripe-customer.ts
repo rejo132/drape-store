@@ -1,34 +1,19 @@
-import { prisma } from "@/lib/db";
 import { getStripeServer } from "@/lib/stripe";
 
-export async function getOrCreateStripeCustomer(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      stripeCustomerId: true,
-    },
-  });
+export async function getOrCreateStripeCustomerByEmail(
+  email: string,
+  name?: string | null
+): Promise<string> {
+  const stripe = getStripeServer();
+  const existing = await stripe.customers.list({ email, limit: 1 });
 
-  if (!user) {
-    throw new Error("User not found");
+  if (existing.data[0]) {
+    return existing.data[0].id;
   }
 
-  if (user.stripeCustomerId) {
-    return user.stripeCustomerId;
-  }
-
-  const customer = await getStripeServer().customers.create({
-    email: user.email,
-    name: user.name ?? undefined,
-    metadata: { userId: user.id },
-  });
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { stripeCustomerId: customer.id },
+  const customer = await stripe.customers.create({
+    email,
+    name: name ?? undefined,
   });
 
   return customer.id;

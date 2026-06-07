@@ -1,6 +1,10 @@
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "path";
 
-import { prisma } from "../lib/prisma";
+config({ path: resolve(process.cwd(), ".env.local") });
+config({ path: resolve(process.cwd(), ".env") });
+
+import { prisma } from "../lib/db";
 
 const products = [
   {

@@ -1,25 +1,38 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
-import {
-  requireSession,
-  serverErrorResponse,
-  unauthorizedResponse,
-} from "@/lib/api-auth";
-import { getOrCreateStripeCustomer } from "@/lib/stripe-customer";
+import { getOrCreateStripeCustomerByEmail } from "@/lib/stripe-customer";
 import { getStripeServer } from "@/lib/stripe";
 
-export async function POST() {
-  const session = await requireSession();
-  if (!session) {
-    return unauthorizedResponse();
+const setupIntentSchema = z.object({
+  email: z.email(),
+  name: z.string().optional(),
+});
+
+export async function POST(request: Request) {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Stripe is not configured" },
+      { status: 500 }
+    );
   }
 
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return serverErrorResponse("Stripe is not configured");
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const parsed = setupIntentSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+  }
+
+  const { email, name } = parsed.data;
 
   try {
-    const customerId = await getOrCreateStripeCustomer(session.user.id);
+    const customerId = await getOrCreateStripeCustomerByEmail(email, name);
 
     const setupIntent = await getStripeServer().setupIntents.create({
       customer: customerId,
@@ -27,12 +40,18 @@ export async function POST() {
     });
 
     if (!setupIntent.client_secret) {
-      return serverErrorResponse("Failed to create setup intent");
+      return NextResponse.json(
+        { error: "Failed to create setup intent" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ clientSecret: setupIntent.client_secret });
   } catch (error) {
     console.error("setup-intent error:", error);
-    return serverErrorResponse("Failed to create setup intent");
+    return NextResponse.json(
+      { error: "Failed to create setup intent" },
+      { status: 500 }
+    );
   }
 }

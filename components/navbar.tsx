@@ -1,14 +1,11 @@
 "use client";
 
-import { LogOut, ShoppingBag, User } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
-import { signOut, useSession } from "next-auth/react";
 
-import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart-context";
 
 export function Navbar() {
-  const { data: session, status } = useSession();
   const { itemCount, isHydrated } = useCart();
 
   return (
@@ -21,7 +18,7 @@ export function Navbar() {
           DRAPE
         </Link>
 
-        <nav className="flex items-center gap-2 sm:gap-4">
+        <nav>
           <Link
             href="/cart"
             className="relative inline-flex items-center justify-center rounded-lg p-2 text-foreground transition-colors hover:bg-muted"
@@ -34,32 +31,6 @@ export function Navbar() {
               </span>
             ) : null}
           </Link>
-
-          {status === "loading" ? (
-            <div className="h-8 w-24 animate-pulse rounded-lg bg-muted" />
-          ) : session?.user ? (
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm sm:flex">
-                <User className="size-4 text-muted-foreground" />
-                <span className="max-w-[160px] truncate text-foreground">
-                  {session.user.name ?? session.user.email}
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="gap-1.5"
-              >
-                <LogOut className="size-3.5" />
-                <span className="hidden sm:inline">Sign out</span>
-              </Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" render={<Link href="/api/auth/signin" />}>
-              Sign in
-            </Button>
-          )}
         </nav>
       </div>
     </header>

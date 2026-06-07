@@ -1,9 +1,8 @@
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatPrice } from "@/lib/format-price";
 
@@ -29,12 +28,6 @@ function formatDate(date: Date): string {
 }
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect(`/auth/signin?callbackUrl=/orders/${params.orderId}`);
-  }
-
   const order = await prisma.order.findUnique({
     where: { id: params.orderId },
     include: {
@@ -48,7 +41,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     },
   });
 
-  if (!order || order.userId !== session.user.id) {
+  if (!order) {
     notFound();
   }
 
@@ -111,16 +104,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+      <div className="mt-8 flex justify-center">
         <Button size="lg" render={<Link href="/" />}>
           Continue shopping
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          render={<Link href="/orders" />}
-        >
-          View all orders
         </Button>
       </div>
     </main>

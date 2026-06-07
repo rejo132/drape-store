@@ -20,9 +20,7 @@ export const metadata: Metadata = {
   title: "DRAPE – Modern Clothing",
   description:
     "Shop curated modern clothing at DRAPE. Browse essentials, save cards securely with Stripe, and checkout in one click.",
-  metadataBase: new URL(
-    process.env.NEXTAUTH_URL ?? "http://localhost:3000"
-  ),
+  metadataBase: new URL("http://localhost:3000"),
   openGraph: {
     title: "DRAPE – Modern Clothing",
     description:

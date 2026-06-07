@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { z } from "zod";
 
-import { requireSession, unauthorizedResponse } from "@/lib/api-auth";
 import { calculateOrderTotal } from "@/lib/checkout";
 import { prisma } from "@/lib/db";
-import { getOrCreateStripeCustomer } from "@/lib/stripe-customer";
+import { getOrCreateStripeCustomerByEmail } from "@/lib/stripe-customer";
 import { getStripeServer } from "@/lib/stripe";
 
 const cartItemSchema = z.object({
@@ -18,6 +17,8 @@ const cartItemSchema = z.object({
 });
 
 const chargeSchema = z.object({
+  email: z.email(),
+  name: z.string().min(1),
   paymentMethodId: z.string().min(1),
   items: z.array(cartItemSchema).min(1),
 });
@@ -29,12 +30,14 @@ type ValidatedLineItem = {
   unitPrice: number;
 };
 
-export async function POST(request: Request) {
-  const session = await requireSession();
-  if (!session) {
-    return unauthorizedResponse();
+function getAppUrl(): string {
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
   }
+  return "http://localhost:3000";
+}
 
+export async function POST(request: Request) {
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json(
       { success: false, error: "Stripe is not configured" },
@@ -60,18 +63,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const { paymentMethodId, items } = parsed.data;
+  const { email, name, paymentMethodId, items } = parsed.data;
 
   try {
-    const stripeCustomerId = await getOrCreateStripeCustomer(session.user.id);
-
+    const stripeCustomerId = await getOrCreateStripeCustomerByEmail(email, name);
     const stripe = getStripeServer();
+
     const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
     if (paymentMethod.customer !== stripeCustomerId) {
       return NextResponse.json(
         {
           success: false,
-          error: "Payment method does not belong to this account",
+          error: "Payment method does not belong to this customer",
         },
         { status: 403 }
       );
@@ -135,8 +138,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const returnUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/orders`;
-
     let paymentIntent: Stripe.PaymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
@@ -146,7 +147,7 @@ export async function POST(request: Request) {
         payment_method: paymentMethodId,
         confirm: true,
         off_session: true,
-        return_url: returnUrl,
+        return_url: `${getAppUrl()}/orders`,
       });
     } catch (error) {
       if (error instanceof Stripe.errors.StripeCardError) {
@@ -173,6 +174,12 @@ export async function POST(request: Request) {
       });
     }
 
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { name },
+      create: { email, name },
+    });
+
     const order = await prisma.$transaction(async (tx) => {
       for (const lineItem of lineItems) {
         await tx.product.update({
@@ -183,7 +190,7 @@ export async function POST(request: Request) {
 
       return tx.order.create({
         data: {
-          userId: session.user.id,
+          userId: user.id,
           status: "paid",
           total: amount,
           stripePaymentId: paymentIntent.id,
@@ -199,7 +206,17 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json({ success: true, orderId: order.id });
+    return NextResponse.json({
+      success: true,
+      orderId: order.id,
+      paymentMethod: {
+        id: paymentMethod.id,
+        brand: paymentMethod.card?.brand ?? "unknown",
+        last4: paymentMethod.card?.last4 ?? "",
+        expMonth: paymentMethod.card?.exp_month ?? 0,
+        expYear: paymentMethod.card?.exp_year ?? 0,
+      },
+    });
   } catch (error) {
     console.error("charge error:", error);
     return NextResponse.json(
